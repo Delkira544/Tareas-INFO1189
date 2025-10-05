@@ -46,3 +46,10 @@ async def update_product(product_id: int, product_update: ProductUpdate):
 @router.patch("/{product_id}", response_model=dict)
 async def partial_update_product(product_id: int, product_update: ProductUpdate):
     return await update_product(product_id, product_update)
+
+@router.delete("/{product_id}", response_model=dict)
+async def delete_product(product_id: int):
+    success = product_controller.delete_product(product_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
+    return {"message": "Producto eliminado exitosamente", "id": product_id}
