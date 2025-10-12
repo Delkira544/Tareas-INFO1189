@@ -1,131 +1,85 @@
-# Tareas-INFO1189
+API Tienda de Informática
 
-## Evaluación Práctica: API REST y GraphQL de Productos
+Descripción
 
-Proyecto que implementa una API completa de gestión de productos de informática usando FastAPI con endpoints REST y GraphQL, incluyendo sistema de categorías.
+API REST y GraphQL para gestionar productos y categorías de una tienda de informática. Implementada en Python con FastAPI y Strawberry GraphQL.
 
-## ✨ Características Implementadas
+Requisitos
 
-### 1. API REST - Endpoints de Productos
-- ✅ **GET /products** - Obtener todos los productos
-- ✅ **GET /products/{id}** - Obtener producto por ID
-- ✅ **POST /products** - Crear nuevo producto (Protegido con JWT)
-- ✅ **PUT /products/{id}** - Actualizar producto completo
-- ✅ **PATCH /products/{id}** - Actualizar producto parcialmente
-- ✅ **DELETE /products/{id}** - Eliminar producto
+- Python 3.12+
+- Dependencias en `requirements.txt`
 
-### 2. API REST - Endpoints de Categorías
-- ✅ **GET /categories** - Obtener todas las categorías
-- ✅ **GET /categories/{id}** - Obtener categoría por ID
-- ✅ **GET /categories/{id}/products** - Obtener productos de una categoría
-- ✅ **POST /categories** - Crear nueva categoría
-- ✅ **DELETE /categories/{id}** - Eliminar categoría
+Instalación
 
-### 3. Categorías Predefinidas (Informática)
-- 🎤 **Micrófonos** - Micrófonos para streaming y grabación
-- 🎮 **Tarjetas de Video** - GPUs y tarjetas gráficas
-- 💾 **Memorias RAM** - Módulos de memoria RAM
-- 🔧 **Placas Madres** - Motherboards y placas base
-- 💿 **Discos Duros** - HDDs, SSDs y almacenamiento
-- ⚡ **Fuentes de Poder** - PSUs y fuentes de alimentación
+1. Crear y activar un entorno virtual (recomendado):
 
-### 4. Autenticación JWT
-- ✅ Middleware de autenticación condicional
-- ✅ Protección del endpoint POST con Bearer Token
-- ✅ Token: `Bearer secreto123`
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
 
-### 5. API GraphQL
-- ✅ **Query categories** - Obtener todas las categorías
-- ✅ **Query category(categoryId)** - Obtener categoría por ID
-- ✅ **Query products** - Obtener todos los productos (con filtro opcional por categoría)
-- ✅ **Query product(productId)** - Obtener producto por ID
-- ✅ **Mutation createCategory** - Crear nueva categoría
-- ✅ **Mutation createProduct** - Crear nuevo producto
-- ✅ **Mutation updateProduct** - Actualizar producto
-- ✅ **Mutation deleteProduct** - Eliminar producto
-- ✅ **Mutation deleteCategory** - Eliminar categoría
+2. Instalar dependencias:
 
-## 🚀 Instalación y Ejecución
-
-### 1. Instalar dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Ejecutar el servidor
+Ejecución
+
 ```bash
 cd src
 uvicorn main:app --reload
 ```
 
-El servidor estará disponible en: `http://localhost:8000`
+El servidor queda disponible en `http://localhost:8000`.
 
-## 📖 Uso de la API
+Archivos importantes
 
-### API REST - Categorías
+- `src/main.py` - Punto de entrada
+- `src/presentation/api/` - Rutas REST y GraphQL
+- `src/infrastructure/database.py` - Inicialización de la base de datos SQLite
+- `src/infrastructure/repositories.py` - Acceso a datos
+- `src/application/use_cases.py` - Lógica de aplicación
+- `src/domain/` - Entidades e interfaces
+- `populate_products.py` - Script para poblar la base de datos con ejemplos
 
-#### Obtener todas las categorías
-```bash
-curl http://localhost:8000/categories
-```
+Autenticación
 
-#### Obtener productos de una categoría específica
-```bash
-# Ejemplo: Productos de "Tarjetas de Video" (ID: 2)
-curl http://localhost:8000/categories/2/products
-```
+Para los endpoints protegidos se usa un header `Authorization: Bearer secreto123`.
 
-#### Crear una nueva categoría
-```bash
-curl -X POST http://localhost:8000/categories \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Procesadores",
-    "description": "CPUs Intel y AMD"
-  }'
-```
+Endpoints principales (REST)
 
-### API REST - Productos
+Productos
 
-#### Obtener todos los productos
-```bash
-curl http://localhost:8000/products
-```
+- `GET /products` — Listar productos
+- `GET /products/{id}` — Obtener producto por id
+- `POST /products` — Crear producto (requiere token)
+- `PUT /products/{id}` — Actualizar producto
+- `PATCH /products/{id}` — Actualizar parcialmente
+- `DELETE /products/{id}` — Eliminar producto
 
-#### Crear un producto con categoría (requiere token JWT)
-```bash
-curl -X POST http://localhost:8000/products \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer secreto123" \
-  -d '{
-    "name": "RTX 4090",
-    "price": 1999.99,
-    "in_stock": true,
-    "currency": "USD",
-    "category_id": 2
-  }'
-```
+Categorías
 
-#### Actualizar producto (PUT)
-```bash
-curl -X PUT http://localhost:8000/products/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Laptop Gaming",
-    "price": 1299.99,
-    "in_stock": true,
-    "currency": "USD"
-  }'
-```
+- `GET /categories` — Listar categorías
+- `GET /categories/{id}` — Obtener categoría por id
+- `GET /categories/{id}/products` — Productos de una categoría
+- `POST /categories` — Crear categoría
+- `DELETE /categories/{id}` — Eliminar categoría
 
-#### Actualizar parcial (PATCH)
-```bash
-curl -X PATCH http://localhost:8000/products/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "price": 899.99
-  }'
-```
+GraphQL
+
+- GraphQL disponible en `POST /graphql` (playground en el navegador cuando está habilitado)
+- Queries principales: `categories`, `category(id)`, `products(categoryId?)`, `product(id)`
+- Mutations principales: `createProduct`, `updateProduct`, `deleteProduct`, `createCategory`, `deleteCategory`
+
+Notas
+
+- La base de datos SQLite se crea en `src/data/` al iniciar la aplicación si no existe.
+- El script `populate_products.py` inserta datos de ejemplo (18 productos, 6 categorías).
+
+Contacto
+
+Si necesitas que deje solo los archivos mínimos para entregar, o que archive los archivos antiguos, dime y lo hago.
 
 #### Eliminar producto
 ```bash
