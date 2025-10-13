@@ -70,11 +70,8 @@ class GetProductByIdUseCase:
         self.product_repo = product_repo
     
     def execute(self, product_id: int) -> Optional[Product]:
-        """Obtener un producto específico"""
-        product = self.product_repo.get_by_id(product_id)
-        if not product:
-            raise ValueError(f"Producto {product_id} no encontrado")
-        return product
+        """Obtener un producto específico (retorna None si no existe)"""
+        return self.product_repo.get_by_id(product_id)
 
 
 class UpdateProductUseCase:
@@ -179,8 +176,5 @@ class GetCategoryByIdUseCase:
         self.category_repo = category_repo
     
     def execute(self, category_id: int) -> Optional[Category]:
-        """Obtener categoría específica"""
-        category = self.category_repo.get_by_id(category_id)
-        if not category:
-            raise ValueError(f"Categoría {category_id} no encontrada")
-        return category
+        """Obtener categoría específica (retorna None si no existe)"""
+        return self.category_repo.get_by_id(category_id)

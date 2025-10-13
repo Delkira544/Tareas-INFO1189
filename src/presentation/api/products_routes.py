@@ -59,13 +59,13 @@ async def create_product(product_request: ProductRequest):
     use_case = container.create_product_use_case()
     
     try:
-        product = use_case.execute(
-            name=product_request.name,
-            price=product_request.price,
-            in_stock=product_request.in_stock,
-            currency=product_request.currency,
-            category_id=product_request.category_id
-        )
+        product = use_case.execute({
+            'name': product_request.name,
+            'price': product_request.price,
+            'in_stock': product_request.in_stock,
+            'currency': product_request.currency,
+            'category_id': product_request.category_id
+        })
         
         return ProductResponse(
             id=product.id,
@@ -74,7 +74,7 @@ async def create_product(product_request: ProductRequest):
             in_stock=product.in_stock,
             currency=product.currency,
             category_id=product.category_id,
-            category_name=None  # Se puede agregar si se necesita
+            category_name=None
         )
     except ValueError as e:
         raise HTTPException(
@@ -142,14 +142,19 @@ async def update_product(product_id: int, product_update: ProductUpdate):
     use_case = container.update_product_use_case()
     
     try:
-        product = use_case.execute(
-            product_id=product_id,
-            name=product_update.name,
-            price=product_update.price,
-            in_stock=product_update.in_stock,
-            currency=product_update.currency,
-            category_id=product_update.category_id
-        )
+        update_data = {}
+        if product_update.name is not None:
+            update_data['name'] = product_update.name
+        if product_update.price is not None:
+            update_data['price'] = product_update.price
+        if product_update.in_stock is not None:
+            update_data['in_stock'] = product_update.in_stock
+        if product_update.currency is not None:
+            update_data['currency'] = product_update.currency
+        if product_update.category_id is not None:
+            update_data['category_id'] = product_update.category_id
+        
+        product = use_case.execute(product_id, update_data)
         
         if not product:
             raise HTTPException(
@@ -185,15 +190,21 @@ async def delete_product(product_id: int):
     container = get_container()
     use_case = container.delete_product_use_case()
     
-    success = use_case.execute(product_id)
-    
-    if not success:
+    try:
+        success = use_case.execute(product_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Producto con ID {product_id} no encontrado"
+            )
+        
+        return {
+            "message": "Producto eliminado exitosamente",
+            "id": product_id
+        }
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Producto con ID {product_id} no encontrado"
+            detail=str(e)
         )
-    
-    return {
-        "message": "Producto eliminado exitosamente",
-        "id": product_id
-    }

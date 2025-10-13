@@ -141,14 +141,34 @@ async def delete_category(category_id: int):
             detail=f"Categoría con ID {category_id} no encontrada"
         )
     
-    # Aquí deberías usar un DeleteCategoryUseCase
-    # Por ahora usamos el repositorio directamente
-    # TODO: Crear DeleteCategoryUseCase
+    # Verificar que no tenga productos asociados
+    products_use_case = container.get_products_use_case()
+    products = products_use_case.execute(category_id=category_id)
+    
+    if products:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede eliminar la categoría porque tiene {len(products)} producto(s) asociado(s)"
+        )
+    
+    # Eliminar categoría
     from infrastructure.repositories import SQLiteCategoryRepository
     repo = SQLiteCategoryRepository()
-    success = repo.delete(category_id)
     
-    return {
-        "message": "Categoría eliminada exitosamente",
-        "id": category_id
-    }
+    try:
+        success = repo.delete(category_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al eliminar la categoría"
+            )
+        
+        return {
+            "message": "Categoría eliminada exitosamente",
+            "id": category_id
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar categoría: {str(e)}"
+        )

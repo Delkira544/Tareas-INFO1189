@@ -191,6 +191,13 @@ class SQLiteProductRepository(IProductRepository):
         finally:
             conn.close()
     
+    def get_by_category(self, category_id: int) -> List[Product]:
+        """
+        Obtener productos por categoría
+        Método requerido por la interfaz IProductRepository
+        """
+        return self.get_all(category_id=category_id)
+    
     def update(self, product: Product) -> Optional[Product]:
         """
         Actualizar producto (ACID: Atomicity + Consistency)

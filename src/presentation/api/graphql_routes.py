@@ -193,22 +193,25 @@ class Mutation:
         container = get_container()
         use_case = container.create_product_use_case()
         
-        product = use_case.execute(
-            name=product_input.name,
-            price=product_input.price,
-            in_stock=product_input.in_stock,
-            currency=product_input.currency,
-            category_id=product_input.category_id
-        )
-        
-        return ProductType(
-            id=product.id,
-            name=product.name,
-            price=product.price,
-            in_stock=product.in_stock,
-            currency=product.currency,
-            category_id=product.category_id
-        )
+        try:
+            product = use_case.execute({
+                'name': product_input.name,
+                'price': product_input.price,
+                'in_stock': product_input.in_stock,
+                'currency': product_input.currency,
+                'category_id': product_input.category_id
+            })
+            
+            return ProductType(
+                id=product.id,
+                name=product.name,
+                price=product.price,
+                in_stock=product.in_stock,
+                currency=product.currency,
+                category_id=product.category_id
+            )
+        except (ValueError, Exception) as e:
+            raise Exception(f"Error al crear producto: {str(e)}")
     
     @strawberry.mutation
     def update_product(
@@ -220,33 +223,45 @@ class Mutation:
         container = get_container()
         use_case = container.update_product_use_case()
         
-        product = use_case.execute(
-            product_id=product_id,
-            name=product_input.name,
-            price=product_input.price,
-            in_stock=product_input.in_stock,
-            currency=product_input.currency,
-            category_id=product_input.category_id
-        )
-        
-        if not product:
-            return None
-        
-        return ProductType(
-            id=product.id,
-            name=product.name,
-            price=product.price,
-            in_stock=product.in_stock,
-            currency=product.currency,
-            category_id=product.category_id
-        )
+        try:
+            update_data = {}
+            if product_input.name is not None:
+                update_data['name'] = product_input.name
+            if product_input.price is not None:
+                update_data['price'] = product_input.price
+            if product_input.in_stock is not None:
+                update_data['in_stock'] = product_input.in_stock
+            if product_input.currency is not None:
+                update_data['currency'] = product_input.currency
+            if product_input.category_id is not None:
+                update_data['category_id'] = product_input.category_id
+            
+            product = use_case.execute(product_id, update_data)
+            
+            if not product:
+                return None
+            
+            return ProductType(
+                id=product.id,
+                name=product.name,
+                price=product.price,
+                in_stock=product.in_stock,
+                currency=product.currency,
+                category_id=product.category_id
+            )
+        except (ValueError, Exception) as e:
+            raise Exception(f"Error al actualizar producto: {str(e)}")
     
     @strawberry.mutation
     def delete_product(self, product_id: int) -> bool:
         """Eliminar un producto"""
         container = get_container()
         use_case = container.delete_product_use_case()
-        return use_case.execute(product_id)
+        
+        try:
+            return use_case.execute(product_id)
+        except ValueError as e:
+            raise Exception(str(e))
     
     @strawberry.mutation
     def create_category(self, category_input: CategoryInput) -> CategoryType:
@@ -254,10 +269,10 @@ class Mutation:
         container = get_container()
         use_case = container.create_category_use_case()
         
-        category = use_case.execute(
-            name=category_input.name,
-            description=category_input.description
-        )
+        category = use_case.execute({
+            'name': category_input.name,
+            'description': category_input.description
+        })
         
         return CategoryType(
             id=category.id,
@@ -268,10 +283,30 @@ class Mutation:
     @strawberry.mutation
     def delete_category(self, category_id: int) -> bool:
         """Eliminar una categoría"""
-        # TODO: Crear DeleteCategoryUseCase
+        container = get_container()
+        
+        # Verificar que existe antes de eliminar
+        get_category_use_case = container.get_category_by_id_use_case()
+        category = get_category_use_case.execute(category_id)
+        if not category:
+            raise Exception(f"Categoría con ID {category_id} no encontrada")
+        
+        # Verificar que no tenga productos asociados
+        products_use_case = container.get_products_use_case()
+        products = products_use_case.execute(category_id=category_id)
+        
+        if products:
+            raise Exception(f"No se puede eliminar la categoría porque tiene {len(products)} producto(s) asociado(s)")
+        
+        # Eliminar categoría
         from infrastructure.repositories import SQLiteCategoryRepository
         repo = SQLiteCategoryRepository()
-        return repo.delete(category_id)
+        
+        try:
+            success = repo.delete(category_id)
+            return success
+        except Exception as e:
+            raise Exception(f"Error al eliminar categoría: {str(e)}")
 
 
 # ============================================================================

@@ -5,16 +5,19 @@ Script para poblar la base de datos con productos de ejemplo
 Ejecutar desde la carpeta src:
     python populate_products.py
 """
-from products.repository import ProductRepository, CategoryRepository
-from products.models import ProductRequest
+from infrastructure.container import get_container
 
 
 def populate_products():
-    product_repo = ProductRepository()
-    category_repo = CategoryRepository()
+    container = get_container()
+    
+    # Use Cases
+    get_categories_use_case = container.get_categories_use_case()
+    create_product_use_case = container.create_product_use_case()
+    get_products_use_case = container.get_products_use_case()
     
     # Obtener todas las categorías
-    categories = category_repo.get_all()
+    categories = get_categories_use_case.execute()
     print(f"📦 Encontradas {len(categories)} categorías")
     print()
     
@@ -60,16 +63,15 @@ def populate_products():
             print(f"🏷️  Categoría: {category_name} (ID: {category.id})")
             
             for product_data in products_data[category_name]:
-                product_request = ProductRequest(
-                    name=product_data["name"],
-                    price=product_data["price"],
-                    in_stock=product_data["in_stock"],
-                    currency="CLP",
-                    category_id=category.id
-                )
-                
                 try:
-                    product = product_repo.create(product_request)
+                    product = create_product_use_case.execute({
+                        'name': product_data["name"],
+                        'price': product_data["price"],
+                        'in_stock': product_data["in_stock"],
+                        'currency': "CLP",
+                        'category_id': category.id
+                    })
+                    
                     status = "✅ Disponible" if product.in_stock else "❌ Agotado"
                     print(f"   ✓ {product.name} - ${product.price:,} CLP {status}")
                     total_created += 1
@@ -84,7 +86,7 @@ def populate_products():
     # Mostrar resumen
     print("📊 Resumen por categoría:")
     for category in categories:
-        products = product_repo.get_by_category(category.id)
+        products = get_products_use_case.execute(category_id=category.id)
         available = sum(1 for p in products if p.in_stock)
         print(f"   • {category.name}: {len(products)} productos ({available} disponibles)")
 

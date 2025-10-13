@@ -63,33 +63,33 @@ class DependencyContainer:
         Inyecta repositorio de productos y categorías
         """
         return CreateProductUseCase(
-            product_repository=self.product_repository(),
-            category_repository=self.category_repository()
+            product_repo=self.product_repository(),
+            category_repo=self.category_repository()
         )
     
     def get_products_use_case(self) -> GetProductsUseCase:
         """Crear Use Case para obtener productos"""
         return GetProductsUseCase(
-            product_repository=self.product_repository()
+            product_repo=self.product_repository()
         )
     
     def get_product_by_id_use_case(self) -> GetProductByIdUseCase:
         """Crear Use Case para obtener producto por ID"""
         return GetProductByIdUseCase(
-            product_repository=self.product_repository()
+            product_repo=self.product_repository()
         )
     
     def update_product_use_case(self) -> UpdateProductUseCase:
         """Crear Use Case para actualizar productos"""
         return UpdateProductUseCase(
-            product_repository=self.product_repository(),
-            category_repository=self.category_repository()
+            product_repo=self.product_repository(),
+            category_repo=self.category_repository()
         )
     
     def delete_product_use_case(self) -> DeleteProductUseCase:
         """Crear Use Case para eliminar productos"""
         return DeleteProductUseCase(
-            product_repository=self.product_repository()
+            product_repo=self.product_repository()
         )
     
     # ========================================================================
@@ -99,19 +99,19 @@ class DependencyContainer:
     def create_category_use_case(self) -> CreateCategoryUseCase:
         """Crear Use Case para crear categorías"""
         return CreateCategoryUseCase(
-            category_repository=self.category_repository()
+            category_repo=self.category_repository()
         )
     
     def get_categories_use_case(self) -> GetCategoriesUseCase:
         """Crear Use Case para obtener categorías"""
         return GetCategoriesUseCase(
-            category_repository=self.category_repository()
+            category_repo=self.category_repository()
         )
     
     def get_category_by_id_use_case(self) -> GetCategoryByIdUseCase:
         """Crear Use Case para obtener categoría por ID"""
         return GetCategoryByIdUseCase(
-            category_repository=self.category_repository()
+            category_repo=self.category_repository()
         )
 
 
