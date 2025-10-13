@@ -1,12 +1,13 @@
 """
-Categories REST API - Implementación con Clean Architecture
-Usa Use Cases en lugar de acceder directamente a repositorios
+Categories API Routes - Presentation Layer
+Endpoints REST para gestionar categorías con Clean Architecture
 """
-from fastapi import APIRouter, HTTPException, status
-from typing import List
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
-from infrastructure.container import get_container
+from infrastructure.container import container
+from application.use_cases import CategoryUseCases
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
@@ -15,160 +16,176 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 # DTOs (Data Transfer Objects)
 # ============================================================================
 
-class CategoryRequest(BaseModel):
-    """DTO para crear categorías"""
-    name: str
-    description: str | None = None
+class CategoryCreateRequest(BaseModel):
+    """DTO para crear categoría"""
+    name: str = Field(..., min_length=1, max_length=100, description="Nombre de la categoría")
+    description: Optional[str] = Field(None, max_length=500, description="Descripción opcional")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Electrónicos",
+                "description": "Productos electrónicos y tecnológicos"
+            }
+        }
 
 
 class CategoryResponse(BaseModel):
-    """DTO para respuestas de categorías"""
+    """DTO para responder categoría"""
     id: int
     name: str
-    description: str | None
+    description: Optional[str]
+    created_at: Optional[str]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": 1,
+                "name": "Electrónicos",
+                "description": "Productos electrónicos y tecnológicos",
+                "created_at": "2024-01-15T10:30:00"
+            }
+        }
+
+
+# ============================================================================
+# Dependency Injection
+# ============================================================================
+
+def get_category_use_cases() -> CategoryUseCases:
+    """Inyección de dependencia para casos de uso de categorías"""
+    return container.get_category_use_cases()
 
 
 # ============================================================================
 # Endpoints REST
 # ============================================================================
 
-@router.get("/", response_model=List[CategoryResponse])
-async def get_categories():
-    """Obtener todas las categorías"""
-    container = get_container()
-    use_case = container.get_categories_use_case()
-    
-    categories = use_case.execute()
-    
-    return [
-        CategoryResponse(
-            id=c.id,
-            name=c.name,
-            description=c.description
-        )
-        for c in categories
-    ]
-
-
-@router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(category_id: int):
-    """Obtener una categoría por ID"""
-    container = get_container()
-    use_case = container.get_category_by_id_use_case()
-    
-    category = use_case.execute(category_id)
-    
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Categoría con ID {category_id} no encontrada"
-        )
-    
-    return CategoryResponse(
-        id=category.id,
-        name=category.name,
-        description=category.description
-    )
-
-
-@router.get("/{category_id}/products", response_model=List[dict])
-async def get_products_by_category(category_id: int):
-    """Obtener todos los productos de una categoría"""
-    container = get_container()
-    
-    # Verificar que la categoría existe
-    category_use_case = container.get_category_by_id_use_case()
-    category = category_use_case.execute(category_id)
-    
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Categoría con ID {category_id} no encontrada"
-        )
-    
-    # Obtener productos de la categoría
-    products_use_case = container.get_products_use_case()
-    products = products_use_case.execute(category_id=category_id)
-    
-    return [
-        {
-            "id": p.id,
-            "name": p.name,
-            "price": p.price,
-            "in_stock": p.in_stock,
-            "currency": p.currency,
-            "category_id": p.category_id
-        }
-        for p in products
-    ]
-
-
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
-async def create_category(category_request: CategoryRequest):
-    """Crear una nueva categoría"""
-    container = get_container()
-    use_case = container.create_category_use_case()
+async def create_category(
+    category_data: CategoryCreateRequest,
+    use_cases: CategoryUseCases = Depends(get_category_use_cases)
+):
+    """
+    Crear nueva categoría
     
+    Requiere autenticación JWT.
+    """
     try:
-        category = use_case.execute(
-            name=category_request.name,
-            description=category_request.description
+        category = use_cases.create_category(
+            name=category_data.name,
+            description=category_data.description
         )
         
         return CategoryResponse(
             id=category.id,
             name=category.name,
-            description=category.description
+            description=category.description,
+            created_at=category.created_at.isoformat() if category.created_at else None
         )
+    
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-
-
-@router.delete("/{category_id}", response_model=dict)
-async def delete_category(category_id: int):
-    """Eliminar una categoría"""
-    container = get_container()
-    use_case = container.get_category_by_id_use_case()
-    
-    # Verificar que existe antes de eliminar
-    category = use_case.execute(category_id)
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Categoría con ID {category_id} no encontrada"
-        )
-    
-    # Verificar que no tenga productos asociados
-    products_use_case = container.get_products_use_case()
-    products = products_use_case.execute(category_id=category_id)
-    
-    if products:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No se puede eliminar la categoría porque tiene {len(products)} producto(s) asociado(s)"
-        )
-    
-    # Eliminar categoría
-    from infrastructure.repositories import SQLiteCategoryRepository
-    repo = SQLiteCategoryRepository()
-    
-    try:
-        success = repo.delete(category_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error al eliminar la categoría"
-            )
-        
-        return {
-            "message": "Categoría eliminada exitosamente",
-            "id": category_id
-        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al eliminar categoría: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.get("/", response_model=List[CategoryResponse])
+async def get_all_categories(
+    use_cases: CategoryUseCases = Depends(get_category_use_cases)
+):
+    """Obtener todas las categorías"""
+    try:
+        categories = use_cases.get_all_categories()
+        
+        return [
+            CategoryResponse(
+                id=category.id,
+                name=category.name,
+                description=category.description,
+                created_at=category.created_at.isoformat() if category.created_at else None
+            )
+            for category in categories
+        ]
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.get("/{category_id}", response_model=CategoryResponse)
+async def get_category_by_id(
+    category_id: int,
+    use_cases: CategoryUseCases = Depends(get_category_use_cases)
+):
+    """Obtener categoría por ID"""
+    try:
+        category = use_cases.get_category_by_id(category_id)
+        
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Categoría con ID {category_id} no encontrada"
+            )
+        
+        return CategoryResponse(
+            id=category.id,
+            name=category.name,
+            description=category.description,
+            created_at=category.created_at.isoformat() if category.created_at else None
+        )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: int,
+    use_cases: CategoryUseCases = Depends(get_category_use_cases)
+):
+    """
+    Eliminar categoría
+    
+    Requiere autenticación JWT.
+    Eliminará también todas las subcategorías y productos asociados.
+    """
+    try:
+        deleted = use_cases.delete_category(category_id)
+        
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Categoría con ID {category_id} no encontrada"
+            )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}"
         )

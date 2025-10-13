@@ -1,130 +1,117 @@
 """
 Dependency Injection Container - Infrastructure Layer
-Gestiona la creación e inyección de dependencias (SOLID: Dependency Inversion)
+Configuración de inyección de dependencias siguiendo principios SOLID
 """
 from functools import lru_cache
 
-from application.use_cases import (
-    CreateProductUseCase,
-    GetProductsUseCase,
-    GetProductByIdUseCase,
-    UpdateProductUseCase,
-    DeleteProductUseCase,
-    CreateCategoryUseCase,
-    GetCategoriesUseCase,
-    GetCategoryByIdUseCase
-)
+from domain.interfaces import IProductRepository, ICategoryRepository, ISubcategoryRepository
 from infrastructure.repositories import (
-    SQLiteProductRepository,
-    SQLiteCategoryRepository
+    SQLiteProductRepository, 
+    SQLiteCategoryRepository, 
+    SQLiteSubcategoryRepository
 )
+from application.use_cases import ProductUseCases, CategoryUseCases, SubcategoryUseCases
 
 
-class DependencyContainer:
+class DIContainer:
     """
     Contenedor de Inyección de Dependencias
     
-    Implementa el patrón Dependency Injection para:
-    - Desacoplar capas (SOLID: Dependency Inversion)
-    - Facilitar testing (mock de repositorios)
-    - Centralizar configuración
-    - Gestionar ciclo de vida de objetos
+    Implementa:
+    - Dependency Inversion Principle (SOLID)
+    - Singleton pattern para repositorios
+    - Factory pattern para casos de uso
     """
     
     def __init__(self):
-        """Inicializar contenedor (usa DatabaseManager global de infrastructure)"""
-        # Repositorios (Singleton - una instancia por contenedor)
-        self._product_repository = None
-        self._category_repository = None
+        self._repositories = {}
+        self._use_cases = {}
     
     # ========================================================================
-    # Factories de Repositorios
+    # Repository Layer (Singletons)
     # ========================================================================
     
-    def product_repository(self) -> SQLiteProductRepository:
-        """Obtener instancia del repositorio de productos (Singleton)"""
-        if self._product_repository is None:
-            self._product_repository = SQLiteProductRepository()
-        return self._product_repository
+    @lru_cache(maxsize=1)
+    def get_category_repository(self) -> ICategoryRepository:
+        """Obtener instancia singleton del repositorio de categorías"""
+        if 'category' not in self._repositories:
+            self._repositories['category'] = SQLiteCategoryRepository()
+        return self._repositories['category']
     
-    def category_repository(self) -> SQLiteCategoryRepository:
-        """Obtener instancia del repositorio de categorías (Singleton)"""
-        if self._category_repository is None:
-            self._category_repository = SQLiteCategoryRepository()
-        return self._category_repository
+    @lru_cache(maxsize=1)
+    def get_subcategory_repository(self) -> ISubcategoryRepository:
+        """Obtener instancia singleton del repositorio de subcategorías"""
+        if 'subcategory' not in self._repositories:
+            self._repositories['subcategory'] = SQLiteSubcategoryRepository()
+        return self._repositories['subcategory']
+    
+    @lru_cache(maxsize=1)
+    def get_product_repository(self) -> IProductRepository:
+        """Obtener instancia singleton del repositorio de productos"""
+        if 'product' not in self._repositories:
+            self._repositories['product'] = SQLiteProductRepository()
+        return self._repositories['product']
     
     # ========================================================================
-    # Factories de Use Cases - Products
+    # Use Cases Layer (Factory Pattern)
     # ========================================================================
     
-    def create_product_use_case(self) -> CreateProductUseCase:
-        """
-        Crear Use Case para crear productos
-        Inyecta repositorio de productos y categorías
-        """
-        return CreateProductUseCase(
-            product_repo=self.product_repository(),
-            category_repo=self.category_repository()
+    def get_category_use_cases(self) -> CategoryUseCases:
+        """Factory method para casos de uso de categorías"""
+        return CategoryUseCases(
+            category_repository=self.get_category_repository()
         )
     
-    def get_products_use_case(self) -> GetProductsUseCase:
-        """Crear Use Case para obtener productos"""
-        return GetProductsUseCase(
-            product_repo=self.product_repository()
+    def get_subcategory_use_cases(self) -> SubcategoryUseCases:
+        """Factory method para casos de uso de subcategorías"""
+        return SubcategoryUseCases(
+            subcategory_repository=self.get_subcategory_repository(),
+            category_repository=self.get_category_repository()
         )
     
-    def get_product_by_id_use_case(self) -> GetProductByIdUseCase:
-        """Crear Use Case para obtener producto por ID"""
-        return GetProductByIdUseCase(
-            product_repo=self.product_repository()
-        )
-    
-    def update_product_use_case(self) -> UpdateProductUseCase:
-        """Crear Use Case para actualizar productos"""
-        return UpdateProductUseCase(
-            product_repo=self.product_repository(),
-            category_repo=self.category_repository()
-        )
-    
-    def delete_product_use_case(self) -> DeleteProductUseCase:
-        """Crear Use Case para eliminar productos"""
-        return DeleteProductUseCase(
-            product_repo=self.product_repository()
+    def get_product_use_cases(self) -> ProductUseCases:
+        """Factory method para casos de uso de productos"""
+        return ProductUseCases(
+            product_repository=self.get_product_repository(),
+            subcategory_repository=self.get_subcategory_repository()
         )
     
     # ========================================================================
-    # Factories de Use Cases - Categories
+    # Health Check Methods
     # ========================================================================
     
-    def create_category_use_case(self) -> CreateCategoryUseCase:
-        """Crear Use Case para crear categorías"""
-        return CreateCategoryUseCase(
-            category_repo=self.category_repository()
-        )
-    
-    def get_categories_use_case(self) -> GetCategoriesUseCase:
-        """Crear Use Case para obtener categorías"""
-        return GetCategoriesUseCase(
-            category_repo=self.category_repository()
-        )
-    
-    def get_category_by_id_use_case(self) -> GetCategoryByIdUseCase:
-        """Crear Use Case para obtener categoría por ID"""
-        return GetCategoryByIdUseCase(
-            category_repo=self.category_repository()
-        )
+    def health_check(self) -> dict:
+        """Verificar el estado de las dependencias"""
+        try:
+            # Verificar repositorios
+            category_repo = self.get_category_repository()
+            subcategory_repo = self.get_subcategory_repository()
+            product_repo = self.get_product_repository()
+            
+            # Verificar casos de uso
+            category_uc = self.get_category_use_cases()
+            subcategory_uc = self.get_subcategory_use_cases()
+            product_uc = self.get_product_use_cases()
+            
+            return {
+                "status": "healthy",
+                "repositories": {
+                    "category": str(type(category_repo).__name__),
+                    "subcategory": str(type(subcategory_repo).__name__),
+                    "product": str(type(product_repo).__name__)
+                },
+                "use_cases": {
+                    "category": str(type(category_uc).__name__),
+                    "subcategory": str(type(subcategory_uc).__name__),
+                    "product": str(type(product_uc).__name__)
+                }
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e)
+            }
 
 
-# ============================================================================
-# Instancia global del contenedor (Singleton)
-# ============================================================================
-
-@lru_cache
-def get_container() -> DependencyContainer:
-    """
-    Obtener instancia global del contenedor (Singleton)
-    
-    Uses lru_cache para garantizar una única instancia.
-    Esta función es la que se debe importar en las capas superiores.
-    """
-    return DependencyContainer()
+# Instancia global del contenedor
+container = DIContainer()

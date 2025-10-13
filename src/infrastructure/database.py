@@ -15,7 +15,7 @@ class DatabaseManager:
     - Crear directorios y archivos de BD
     - Inicializar esquema de tablas
     - Proveer conexiones a repositorios
-    - Poblar datos iniciales (categorías)
+    - Poblar datos iniciales (categorías y subcategorías)
     """
     
     def __init__(self, db_name: str = "products.db"):
@@ -48,7 +48,7 @@ class DatabaseManager:
             # Habilitar foreign keys (importante para ACID)
             conn.execute("PRAGMA foreign_keys = ON")
             
-            # Tabla de categorías
+            # Tabla de categorías principales
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,28 +58,41 @@ class DatabaseManager:
                 )
             """)
             
-            # Tabla de productos con categoría
+            # Tabla de subcategorías
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS subcategories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    category_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                    UNIQUE(name, category_id)
+                )
+            """)
+            
+            # Tabla de productos con subcategoría
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    price REAL NOT NULL,
+                    price REAL NOT NULL CHECK(price >= 0),
                     in_stock BOOLEAN NOT NULL DEFAULT 1,
-                    currency TEXT NOT NULL DEFAULT 'USD',
-                    category_id INTEGER,
+                    currency TEXT NOT NULL DEFAULT 'CLP' CHECK(currency IN ('CLP', 'USD', 'EUR')),
+                    subcategory_id INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (category_id) REFERENCES categories(id)
+                    FOREIGN KEY (subcategory_id) REFERENCES subcategories(id) ON DELETE CASCADE
                 )
             """)
             
             # Insertar categorías predefinidas si no existen
             categories = [
-                ("Micrófonos", "Micrófonos para streaming y grabación"),
-                ("Tarjetas de Video", "GPUs y tarjetas gráficas"),
-                ("Memorias RAM", "Módulos de memoria RAM"),
-                ("Placas Madres", "Motherboards y placas base"),
-                ("Discos Duros", "HDDs, SSDs y almacenamiento"),
-                ("Fuentes de Poder", "PSUs y fuentes de alimentación")
+                ("Audio y Video", "Equipos de audio, video y streaming"),
+                ("Hardware PC", "Componentes de computadora"),
+                ("Almacenamiento", "Dispositivos de almacenamiento"),
+                ("Periféricos", "Mouse, teclados y accesorios"),
+                ("Monitores", "Pantallas y displays"),
+                ("Redes", "Equipos de red y conectividad")
             ]
             
             cursor = conn.cursor()
@@ -87,6 +100,45 @@ class DatabaseManager:
                 cursor.execute(
                     "INSERT OR IGNORE INTO categories (name, description) VALUES (?, ?)",
                     (name, description)
+                )
+            
+            # Insertar subcategorías predefinidas
+            subcategories = [
+                # Audio y Video (ID: 1)
+                ("Micrófonos", "Micrófonos para streaming y grabación", 1),
+                ("Cámaras Web", "Webcams y cámaras de streaming", 1),
+                ("Auriculares", "Audífonos y headsets", 1),
+                
+                # Hardware PC (ID: 2)
+                ("Tarjetas de Video", "GPUs y tarjetas gráficas", 2),
+                ("Procesadores", "CPUs Intel y AMD", 2),
+                ("Memorias RAM", "Módulos de memoria RAM", 2),
+                ("Placas Madres", "Motherboards y placas base", 2),
+                ("Fuentes de Poder", "PSUs y fuentes de alimentación", 2),
+                
+                # Almacenamiento (ID: 3)
+                ("SSD", "Discos sólidos SSD", 3),
+                ("HDD", "Discos duros tradicionales", 3),
+                ("Almacenamiento Externo", "USB, externos y portables", 3),
+                
+                # Periféricos (ID: 4)
+                ("Teclados", "Teclados mecánicos y de membrana", 4),
+                ("Mouse", "Ratones gaming y oficina", 4),
+                ("Mousepads", "Alfombrillas para mouse", 4),
+                
+                # Monitores (ID: 5)
+                ("Gaming", "Monitores para gaming", 5),
+                ("Profesional", "Monitores para trabajo", 5),
+                
+                # Redes (ID: 6)
+                ("Routers", "Routers y access points", 6),
+                ("Switches", "Switches de red", 6)
+            ]
+            
+            for name, description, category_id in subcategories:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO subcategories (name, description, category_id) VALUES (?, ?, ?)",
+                    (name, description, category_id)
                 )
             
             conn.commit()

@@ -1,112 +1,117 @@
 """
-Script para poblar la base de datos con productos de ejemplo
-3 productos por cada categoría, todos en pesos chilenos (CLP)
-
-Ejecutar desde la carpeta src:
-    python populate_products.py
+Populate Products Script
+Script para poblar la base de datos con datos de ejemplo
 """
-from infrastructure.container import get_container
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from infrastructure.container import container
 
 
-def populate_products():
-    container = get_container()
+def populate_sample_data():
+    """Poblar base de datos con productos de ejemplo"""
     
-    # Use Cases
-    get_categories_use_case = container.get_categories_use_case()
-    create_product_use_case = container.create_product_use_case()
-    get_products_use_case = container.get_products_use_case()
+    print("🔄 Poblando base de datos con datos de ejemplo...")
     
-    # Obtener todas las categorías
-    categories = get_categories_use_case.execute()
-    print(f"📦 Encontradas {len(categories)} categorías")
-    print()
+    # Obtener casos de uso
+    product_uc = container.get_product_use_cases()
+    category_uc = container.get_category_use_cases()
+    subcategory_uc = container.get_subcategory_use_cases()
     
-    # Productos por categoría (3 cada una)
-    products_data = {
-        "Micrófonos": [
-            {"name": "HyperX QuadCast", "price": 89990, "in_stock": True},
-            {"name": "Blue Yeti USB", "price": 129990, "in_stock": True},
-            {"name": "Razer Seiren Mini", "price": 49990, "in_stock": False},
-        ],
-        "Tarjetas de Video": [
-            {"name": "NVIDIA RTX 4090 24GB", "price": 2499990, "in_stock": True},
-            {"name": "AMD RX 7900 XTX 24GB", "price": 1599990, "in_stock": True},
-            {"name": "NVIDIA RTX 4070 Ti 12GB", "price": 1199990, "in_stock": False},
-        ],
-        "Memorias RAM": [
-            {"name": "Kingston Fury 16GB DDR4 3200MHz", "price": 45990, "in_stock": True},
-            {"name": "Corsair Vengeance 32GB DDR5 5600MHz", "price": 159990, "in_stock": True},
-            {"name": "G.Skill Trident Z5 64GB DDR5 6000MHz", "price": 349990, "in_stock": True},
-        ],
-        "Placas Madres": [
-            {"name": "ASUS ROG Strix Z790-E Gaming", "price": 599990, "in_stock": True},
-            {"name": "MSI MAG B650 TOMAHAWK WiFi", "price": 249990, "in_stock": True},
-            {"name": "Gigabyte X670 AORUS Elite AX", "price": 429990, "in_stock": False},
-        ],
-        "Discos Duros": [
-            {"name": "Samsung 990 PRO SSD 2TB NVMe", "price": 179990, "in_stock": True},
-            {"name": "WD Black SN850X 1TB NVMe", "price": 129990, "in_stock": True},
-            {"name": "Seagate Barracuda HDD 4TB", "price": 89990, "in_stock": True},
-        ],
-        "Fuentes de Poder": [
-            {"name": "Corsair RM1000e 1000W 80+ Gold", "price": 199990, "in_stock": True},
-            {"name": "EVGA SuperNOVA 850W 80+ Platinum", "price": 169990, "in_stock": True},
-            {"name": "Seasonic Focus GX-750 750W 80+ Gold", "price": 129990, "in_stock": False},
-        ],
-    }
-    
-    # Crear productos
-    total_created = 0
-    for category in categories:
-        category_name = category.name
-        if category_name in products_data:
-            print(f"🏷️  Categoría: {category_name} (ID: {category.id})")
+    try:
+        # Obtener categorías y subcategorías existentes
+        categories = category_uc.get_all_categories()
+        subcategories = subcategory_uc.get_all_subcategories()
+        
+        if not categories or not subcategories:
+            print("❌ No se encontraron categorías o subcategorías. Verifica la inicialización de la BD.")
+            return
+        
+        # Productos de ejemplo por subcategoría
+        sample_products = [
+            # Micrófonos (subcategory_id: 1)
+            ("Blue Yeti USB", 150000, 1, "CLP"),
+            ("Audio-Technica AT2020", 180000, 1, "CLP"),
+            ("Shure SM7B", 450000, 1, "CLP"),
             
-            for product_data in products_data[category_name]:
-                try:
-                    product = create_product_use_case.execute({
-                        'name': product_data["name"],
-                        'price': product_data["price"],
-                        'in_stock': product_data["in_stock"],
-                        'currency': "CLP",
-                        'category_id': category.id
-                    })
-                    
-                    status = "✅ Disponible" if product.in_stock else "❌ Agotado"
-                    print(f"   ✓ {product.name} - ${product.price:,} CLP {status}")
-                    total_created += 1
-                except Exception as e:
-                    print(f"   ✗ Error al crear {product_data['name']}: {e}")
+            # Cámaras Web (subcategory_id: 2)
+            ("Logitech C920", 95000, 2, "CLP"),
+            ("Razer Kiyo", 120000, 2, "CLP"),
+            ("Elgato Facecam", 200000, 2, "CLP"),
             
-            print()
+            # Auriculares (subcategory_id: 3)
+            ("Sony WH-1000XM4", 280000, 3, "CLP"),
+            ("SteelSeries Arctis 7", 150000, 3, "CLP"),
+            ("Audio-Technica ATH-M50x", 120000, 3, "CLP"),
+            
+            # Tarjetas de Video (subcategory_id: 4)
+            ("NVIDIA RTX 4090", 2500000, 4, "CLP"),
+            ("AMD RX 7800 XT", 800000, 4, "CLP"),
+            ("NVIDIA RTX 4070", 650000, 4, "CLP"),
+            
+            # Procesadores (subcategory_id: 5)
+            ("Intel i9-13900K", 650000, 5, "CLP"),
+            ("AMD Ryzen 9 7900X", 580000, 5, "CLP"),
+            ("Intel i5-13600K", 380000, 5, "CLP"),
+            
+            # Memorias RAM (subcategory_id: 6)
+            ("Corsair Vengeance 32GB DDR5", 250000, 6, "CLP"),
+            ("G.Skill Trident Z5 16GB", 150000, 6, "CLP"),
+            ("Kingston Fury 64GB DDR5", 450000, 6, "CLP"),
+            
+            # SSD (subcategory_id: 9)
+            ("Samsung 980 PRO 1TB", 120000, 9, "CLP"),
+            ("WD Black SN850X 2TB", 280000, 9, "CLP"),
+            ("Crucial MX4 500GB", 65000, 9, "CLP"),
+            
+            # Teclados (subcategory_id: 12)
+            ("Corsair K95 RGB Platinum", 180000, 12, "CLP"),
+            ("Razer BlackWidow V3", 120000, 12, "CLP"),
+            ("Logitech MX Keys", 95000, 12, "CLP"),
+            
+            # Mouse (subcategory_id: 13)
+            ("Logitech G Pro X Superlight", 85000, 13, "CLP"),
+            ("Razer DeathAdder V3", 65000, 13, "CLP"),
+            ("SteelSeries Rival 650", 75000, 13, "CLP"),
+            
+            # Monitores Gaming (subcategory_id: 15)
+            ("ASUS ROG Swift PG279QM", 850000, 15, "CLP"),
+            ("Samsung Odyssey G7", 550000, 15, "CLP"),
+            ("LG UltraGear 27GP850", 380000, 15, "CLP"),
+        ]
+        
+        created_count = 0
+        
+        for name, price, subcategory_id, currency in sample_products:
+            try:
+                product = product_uc.create_product(
+                    name=name,
+                    price=price,
+                    subcategory_id=subcategory_id,
+                    in_stock=True,
+                    currency=currency
+                )
+                created_count += 1
+                print(f"✅ Creado: {product.name} - ${product.price:,} {product.currency}")
+                
+            except Exception as e:
+                print(f"❌ Error creando {name}: {str(e)}")
+        
+        print(f"\n🎉 Proceso completado!")
+        print(f"📦 {created_count} productos creados exitosamente")
+        print(f"🏷️  {len(categories)} categorías disponibles")
+        print(f"🔖 {len(subcategories)} subcategorías disponibles")
+        
+        # Mostrar resumen por categoría
+        print("\n📊 Resumen por categoría:")
+        for category in categories:
+            products_in_category = product_uc.get_products_by_category(category.id)
+            print(f"   {category.name}: {len(products_in_category)} productos")
     
-    print(f"🎉 Total de productos creados: {total_created}/18")
-    print()
-    
-    # Mostrar resumen
-    print("📊 Resumen por categoría:")
-    for category in categories:
-        products = get_products_use_case.execute(category_id=category.id)
-        available = sum(1 for p in products if p.in_stock)
-        print(f"   • {category.name}: {len(products)} productos ({available} disponibles)")
+    except Exception as e:
+        print(f"❌ Error general: {str(e)}")
 
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print("🛒 POBLANDO BASE DE DATOS - TIENDA DE INFORMÁTICA")
-    print("=" * 70)
-    print()
-    
-    try:
-        populate_products()
-        print()
-        print("=" * 70)
-        print("✅ Base de datos poblada exitosamente")
-        print("=" * 70)
-    except Exception as e:
-        print()
-        print("=" * 70)
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        print("=" * 70)
+    populate_sample_data()

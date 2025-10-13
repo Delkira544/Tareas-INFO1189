@@ -6,9 +6,10 @@ from typing import List, Optional
 import sqlite3
 from contextlib import contextmanager
 
-from domain.entities import Product, Category
-from domain.interfaces import IProductRepository, ICategoryRepository, IUnitOfWork
+from domain.entities import Product, Category, Subcategory
+from domain.interfaces import IProductRepository, ICategoryRepository, ISubcategoryRepository, IUnitOfWork
 from infrastructure.database import db_manager
+from shared.datetime_utils import DateTimeConverter  # ← Import del shared
 
 
 # ============================================================================
@@ -16,15 +17,7 @@ from infrastructure.database import db_manager
 # ============================================================================
 
 class SQLiteUnitOfWork(IUnitOfWork):
-    """
-    Unit of Work para gestionar transacciones ACID en SQLite
-    
-    Propiedades ACID implementadas:
-    - Atomicity: Todo o nada con commit/rollback
-    - Consistency: Foreign keys y constraints
-    - Isolation: Nivel de aislamiento de SQLite
-    - Durability: Los commits son permanentes
-    """
+    """Unit of Work para gestionar transacciones ACID en SQLite"""
     
     def __init__(self):
         self.connection = None
@@ -62,197 +55,20 @@ class SQLiteUnitOfWork(IUnitOfWork):
 
 
 # ============================================================================
-# Product Repository - Implementación SQLite
-# ============================================================================
-
-class SQLiteProductRepository(IProductRepository):
-    """
-    Implementación concreta del repositorio de productos
-    
-    Implementa IProductRepository (SOLID: Dependency Inversion)
-    Usa DatabaseManager global para conexiones
-    """
-    
-    def __init__(self):
-        """Inicializar repositorio usando DatabaseManager global"""
-        self.uow = SQLiteUnitOfWork()
-    
-    def _get_connection(self) -> sqlite3.Connection:
-        """Obtener conexión desde el DatabaseManager"""
-        return db_manager.get_connection()
-    
-    def create(self, product: Product) -> Product:
-        """
-        Crear producto (ACID: Atomicity + Durability)
-        La operación es atómica y los cambios son permanentes
-        """
-        with self.uow.transaction() as conn:
-            cursor = conn.execute("""
-                INSERT INTO products (name, price, in_stock, currency, category_id)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                product.name,
-                product.price,
-                product.in_stock,
-                product.currency,
-                product.category_id
-            ))
-            
-            product.id = cursor.lastrowid
-        
-        return self.get_by_id(product.id)
-    
-    def get_by_id(self, product_id: int) -> Optional[Product]:
-        """
-        Obtener producto por ID
-        Incluye información de categoría mediante JOIN
-        """
-        conn = self._get_connection()
-        try:
-            row = conn.execute("""
-                SELECT 
-                    p.id,
-                    p.name,
-                    p.price,
-                    p.in_stock,
-                    p.currency,
-                    p.category_id,
-                    c.name as category_name
-                FROM products p
-                LEFT JOIN categories c ON p.category_id = c.id
-                WHERE p.id = ?
-            """, (product_id,)).fetchone()
-            
-            if row:
-                return Product(
-                    id=row['id'],
-                    name=row['name'],
-                    price=row['price'],
-                    in_stock=bool(row['in_stock']),
-                    currency=row['currency'],
-                    category_id=row['category_id']
-                )
-            return None
-        finally:
-            conn.close()
-    
-    def get_all(self, category_id: Optional[int] = None) -> List[Product]:
-        """
-        Obtener todos los productos, opcionalmente filtrados por categoría
-        
-        Args:
-            category_id: ID de categoría para filtrar (opcional)
-        """
-        conn = self._get_connection()
-        try:
-            if category_id is not None:
-                query = """
-                    SELECT 
-                        p.id,
-                        p.name,
-                        p.price,
-                        p.in_stock,
-                        p.currency,
-                        p.category_id,
-                        c.name as category_name
-                    FROM products p
-                    LEFT JOIN categories c ON p.category_id = c.id
-                    WHERE p.category_id = ?
-                    ORDER BY p.name
-                """
-                rows = conn.execute(query, (category_id,)).fetchall()
-            else:
-                query = """
-                    SELECT 
-                        p.id,
-                        p.name,
-                        p.price,
-                        p.in_stock,
-                        p.currency,
-                        p.category_id,
-                        c.name as category_name
-                    FROM products p
-                    LEFT JOIN categories c ON p.category_id = c.id
-                    ORDER BY p.name
-                """
-                rows = conn.execute(query).fetchall()
-            
-            return [
-                Product(
-                    id=row['id'],
-                    name=row['name'],
-                    price=row['price'],
-                    in_stock=bool(row['in_stock']),
-                    currency=row['currency'],
-                    category_id=row['category_id']
-                )
-                for row in rows
-            ]
-        finally:
-            conn.close()
-    
-    def get_by_category(self, category_id: int) -> List[Product]:
-        """
-        Obtener productos por categoría
-        Método requerido por la interfaz IProductRepository
-        """
-        return self.get_all(category_id=category_id)
-    
-    def update(self, product: Product) -> Optional[Product]:
-        """
-        Actualizar producto (ACID: Atomicity + Consistency)
-        La actualización es atómica y mantiene integridad referencial
-        """
-        with self.uow.transaction() as conn:
-            conn.execute("""
-                UPDATE products
-                SET name = ?, price = ?, in_stock = ?, currency = ?, category_id = ?
-                WHERE id = ?
-            """, (
-                product.name,
-                product.price,
-                product.in_stock,
-                product.currency,
-                product.category_id,
-                product.id
-            ))
-        
-        return self.get_by_id(product.id)
-    
-    def delete(self, product_id: int) -> bool:
-        """
-        Eliminar producto (ACID: Atomicity + Durability)
-        La eliminación es permanente y atómica
-        """
-        with self.uow.transaction() as conn:
-            cursor = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
-            return cursor.rowcount > 0
-
-
-# ============================================================================
 # Category Repository - Implementación SQLite
 # ============================================================================
 
 class SQLiteCategoryRepository(ICategoryRepository):
-    """
-    Implementación concreta del repositorio de categorías
-    
-    Implementa ICategoryRepository (SOLID: Dependency Inversion)
-    """
+    """Implementación concreta del repositorio de categorías"""
     
     def __init__(self):
-        """Inicializar repositorio usando DatabaseManager global"""
         self.uow = SQLiteUnitOfWork()
     
     def _get_connection(self) -> sqlite3.Connection:
-        """Obtener conexión desde el DatabaseManager"""
         return db_manager.get_connection()
     
     def create(self, category: Category) -> Category:
-        """
-        Crear categoría (ACID)
-        Operación atómica con commit automático
-        """
+        """Crear categoría (ACID)"""
         with self.uow.transaction() as conn:
             cursor = conn.execute("""
                 INSERT INTO categories (name, description)
@@ -268,7 +84,7 @@ class SQLiteCategoryRepository(ICategoryRepository):
         conn = self._get_connection()
         try:
             row = conn.execute("""
-                SELECT id, name, description
+                SELECT id, name, description, created_at
                 FROM categories
                 WHERE id = ?
             """, (category_id,)).fetchone()
@@ -277,7 +93,8 @@ class SQLiteCategoryRepository(ICategoryRepository):
                 return Category(
                     id=row['id'],
                     name=row['name'],
-                    description=row['description']
+                    description=row['description'],
+                    created_at=DateTimeConverter.from_sqlite_row(row)  # ← USO DEL SHARED
                 )
             return None
         finally:
@@ -288,7 +105,7 @@ class SQLiteCategoryRepository(ICategoryRepository):
         conn = self._get_connection()
         try:
             rows = conn.execute("""
-                SELECT id, name, description
+                SELECT id, name, description, created_at
                 FROM categories
                 ORDER BY name
             """).fetchall()
@@ -297,7 +114,8 @@ class SQLiteCategoryRepository(ICategoryRepository):
                 Category(
                     id=row['id'],
                     name=row['name'],
-                    description=row['description']
+                    description=row['description'],
+                    created_at=DateTimeConverter.from_sqlite_row(row)  # ← USO DEL SHARED
                 )
                 for row in rows
             ]
@@ -305,12 +123,359 @@ class SQLiteCategoryRepository(ICategoryRepository):
             conn.close()
     
     def delete(self, category_id: int) -> bool:
-        """
-        Eliminar categoría (ACID)
-        
-        NOTA: Si hay productos asociados, SQLite devolverá error
-        por la foreign key constraint (garantiza CONSISTENCY)
-        """
+        """Eliminar categoría (CASCADE eliminará subcategorías)"""
         with self.uow.transaction() as conn:
             cursor = conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+            return cursor.rowcount > 0
+
+
+# ============================================================================
+# Subcategory Repository - Implementación SQLite
+# ============================================================================
+
+class SQLiteSubcategoryRepository(ISubcategoryRepository):
+    """Implementación concreta del repositorio de subcategorías"""
+    
+    def __init__(self):
+        self.uow = SQLiteUnitOfWork()
+    
+    def _get_connection(self) -> sqlite3.Connection:
+        return db_manager.get_connection()
+    
+    def create(self, subcategory: Subcategory) -> Subcategory:
+        """Crear subcategoría (ACID)"""
+        with self.uow.transaction() as conn:
+            cursor = conn.execute("""
+                INSERT INTO subcategories (name, description, category_id)
+                VALUES (?, ?, ?)
+            """, (subcategory.name, subcategory.description, subcategory.category_id))
+            
+            subcategory.id = cursor.lastrowid
+        
+        return self.get_by_id(subcategory.id)
+    
+    def get_by_id(self, subcategory_id: int) -> Optional[Subcategory]:
+        """Obtener subcategoría por ID con información de categoría"""
+        conn = self._get_connection()
+        try:
+            row = conn.execute("""
+                SELECT 
+                    s.id, s.name, s.description, s.category_id, s.created_at,
+                    c.name as category_name, c.description as category_description
+                FROM subcategories s
+                JOIN categories c ON s.category_id = c.id
+                WHERE s.id = ?
+            """, (subcategory_id,)).fetchone()
+            
+            if row:
+                category = Category(
+                    id=row['category_id'],
+                    name=row['category_name'],
+                    description=row['category_description']
+                )
+                
+                return Subcategory(
+                    id=row['id'],
+                    name=row['name'],
+                    description=row['description'],
+                    category_id=row['category_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    category=category
+                )
+            return None
+        finally:
+            conn.close()
+    
+    def get_all(self) -> List[Subcategory]:
+        """Obtener todas las subcategorías con información de categoría"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT 
+                    s.id, s.name, s.description, s.category_id, s.created_at,
+                    c.name as category_name, c.description as category_description
+                FROM subcategories s
+                JOIN categories c ON s.category_id = c.id
+                ORDER BY c.name, s.name
+            """).fetchall()
+            
+            return [
+                Subcategory(
+                    id=row['id'],
+                    name=row['name'],
+                    description=row['description'],
+                    category_id=row['category_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    category=Category(
+                        id=row['category_id'],
+                        name=row['category_name'],
+                        description=row['category_description']
+                    )
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()
+    
+    def get_by_category(self, category_id: int) -> List[Subcategory]:
+        """Obtener subcategorías por categoría"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT 
+                    s.id, s.name, s.description, s.category_id, s.created_at,
+                    c.name as category_name, c.description as category_description
+                FROM subcategories s
+                JOIN categories c ON s.category_id = c.id
+                WHERE s.category_id = ?
+                ORDER BY s.name
+            """, (category_id,)).fetchall()
+            
+            return [
+                Subcategory(
+                    id=row['id'],
+                    name=row['name'],
+                    description=row['description'],
+                    category_id=row['category_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    category=Category(
+                        id=row['category_id'],
+                        name=row['category_name'],
+                        description=row['category_description']
+                    )
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()
+    
+    def delete(self, subcategory_id: int) -> bool:
+        """Eliminar subcategoría (CASCADE eliminará productos)"""
+        with self.uow.transaction() as conn:
+            cursor = conn.execute("DELETE FROM subcategories WHERE id = ?", (subcategory_id,))
+            return cursor.rowcount > 0
+
+
+# ============================================================================
+# Product Repository - Implementación SQLite
+# ============================================================================
+
+class SQLiteProductRepository(IProductRepository):
+    """Implementación concreta del repositorio de productos con subcategorías"""
+    
+    def __init__(self):
+        self.uow = SQLiteUnitOfWork()
+    
+    def _get_connection(self) -> sqlite3.Connection:
+        return db_manager.get_connection()
+    
+    def create(self, product: Product) -> Product:
+        """Crear producto (ACID: Atomicity + Durability)"""
+        with self.uow.transaction() as conn:
+            cursor = conn.execute("""
+                INSERT INTO products (name, price, in_stock, currency, subcategory_id)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                product.name,
+                product.price,
+                product.in_stock,
+                product.currency,
+                product.subcategory_id
+            ))
+            
+            product.id = cursor.lastrowid
+        
+        return self.get_by_id(product.id)
+    
+    def get_by_id(self, product_id: int) -> Optional[Product]:
+        """Obtener producto por ID con subcategoría y categoría completa"""
+        conn = self._get_connection()
+        try:
+            row = conn.execute("""
+                SELECT 
+                    p.id, p.name, p.price, p.in_stock, p.currency, p.subcategory_id, p.created_at,
+                    s.name as subcategory_name, s.description as subcategory_description,
+                    c.id as category_id, c.name as category_name, c.description as category_description
+                FROM products p
+                JOIN subcategories s ON p.subcategory_id = s.id
+                JOIN categories c ON s.category_id = c.id
+                WHERE p.id = ?
+            """, (product_id,)).fetchone()
+            
+            if row:
+                category = Category(
+                    id=row['category_id'],
+                    name=row['category_name'],
+                    description=row['category_description']
+                )
+                
+                subcategory = Subcategory(
+                    id=row['subcategory_id'],
+                    name=row['subcategory_name'],
+                    description=row['subcategory_description'],
+                    category_id=row['category_id'],
+                    category=category
+                )
+                
+                return Product(
+                    id=row['id'],
+                    name=row['name'],
+                    price=row['price'],
+                    in_stock=bool(row['in_stock']),
+                    currency=row['currency'],
+                    subcategory_id=row['subcategory_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    subcategory=subcategory
+                )
+            return None
+        finally:
+            conn.close()
+    
+    def get_all(self) -> List[Product]:
+        """Obtener todos los productos con subcategoría y categoría"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT 
+                    p.id, p.name, p.price, p.in_stock, p.currency, p.subcategory_id, p.created_at,
+                    s.name as subcategory_name, s.description as subcategory_description,
+                    c.id as category_id, c.name as category_name, c.description as category_description
+                FROM products p
+                JOIN subcategories s ON p.subcategory_id = s.id
+                JOIN categories c ON s.category_id = c.id
+                ORDER BY p.name
+            """).fetchall()
+            
+            return [
+                Product(
+                    id=row['id'],
+                    name=row['name'],
+                    price=row['price'],
+                    in_stock=bool(row['in_stock']),
+                    currency=row['currency'],
+                    subcategory_id=row['subcategory_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    subcategory=Subcategory(
+                        id=row['subcategory_id'],
+                        name=row['subcategory_name'],
+                        description=row['subcategory_description'],
+                        category_id=row['category_id'],
+                        category=Category(
+                            id=row['category_id'],
+                            name=row['category_name'],
+                            description=row['category_description']
+                        )
+                    )
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()
+    
+    def get_by_subcategory(self, subcategory_id: int) -> List[Product]:
+        """Obtener productos por subcategoría"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT 
+                    p.id, p.name, p.price, p.in_stock, p.currency, p.subcategory_id, p.created_at,
+                    s.name as subcategory_name, s.description as subcategory_description,
+                    c.id as category_id, c.name as category_name, c.description as category_description
+                FROM products p
+                JOIN subcategories s ON p.subcategory_id = s.id
+                JOIN categories c ON s.category_id = c.id
+                WHERE p.subcategory_id = ?
+                ORDER BY p.name
+            """, (subcategory_id,)).fetchall()
+            
+            return [
+                Product(
+                    id=row['id'],
+                    name=row['name'],
+                    price=row['price'],
+                    in_stock=bool(row['in_stock']),
+                    currency=row['currency'],
+                    subcategory_id=row['subcategory_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    subcategory=Subcategory(
+                        id=row['subcategory_id'],
+                        name=row['subcategory_name'],
+                        description=row['subcategory_description'],
+                        category_id=row['category_id'],
+                        category=Category(
+                            id=row['category_id'],
+                            name=row['category_name'],
+                            description=row['category_description']
+                        )
+                    )
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()
+    
+    def get_by_category(self, category_id: int) -> List[Product]:
+        """Obtener todos los productos de una categoría (todas sus subcategorías)"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT 
+                    p.id, p.name, p.price, p.in_stock, p.currency, p.subcategory_id, p.created_at,
+                    s.name as subcategory_name, s.description as subcategory_description,
+                    c.id as category_id, c.name as category_name, c.description as category_description
+                FROM products p
+                JOIN subcategories s ON p.subcategory_id = s.id
+                JOIN categories c ON s.category_id = c.id
+                WHERE c.id = ?
+                ORDER BY p.name
+            """, (category_id,)).fetchall()
+            
+            return [
+                Product(
+                    id=row['id'],
+                    name=row['name'],
+                    price=row['price'],
+                    in_stock=bool(row['in_stock']),
+                    currency=row['currency'],
+                    subcategory_id=row['subcategory_id'],
+                    created_at=DateTimeConverter.from_sqlite_row(row),  # ← USO DEL SHARED
+                    subcategory=Subcategory(
+                        id=row['subcategory_id'],
+                        name=row['subcategory_name'],
+                        description=row['subcategory_description'],
+                        category_id=row['category_id'],
+                        category=Category(
+                            id=row['category_id'],
+                            name=row['category_name'],
+                            description=row['category_description']
+                        )
+                    )
+                )
+                for row in rows
+            ]
+        finally:
+            conn.close()
+    
+    def update(self, product: Product) -> Optional[Product]:
+        """Actualizar producto (ACID: Atomicity + Consistency)"""
+        with self.uow.transaction() as conn:
+            conn.execute("""
+                UPDATE products
+                SET name = ?, price = ?, in_stock = ?, currency = ?, subcategory_id = ?
+                WHERE id = ?
+            """, (
+                product.name,
+                product.price,
+                product.in_stock,
+                product.currency,
+                product.subcategory_id,
+                product.id
+            ))
+        
+        return self.get_by_id(product.id)
+    
+    def delete(self, product_id: int) -> bool:
+        """Eliminar producto (ACID: Atomicity + Durability)"""
+        with self.uow.transaction() as conn:
+            cursor = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
             return cursor.rowcount > 0
